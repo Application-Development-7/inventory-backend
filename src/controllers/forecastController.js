@@ -4,10 +4,14 @@ const { analyzeSeries } = require('../services/forecastingService');
 
 exports.getProductForecast = async (req, res) => {
   try {
-    const product = await Product.getById(req.params.productId);
+    const product = await Product.getById(req.params.productId, req.user.id);
     if (!product) return res.status(404).json({ message: 'Not found' });
 
-    const data = await Forecast.getMonthlyDemand(req.params.productId, 24);
+    const data = await Forecast.getMonthlyDemand(
+      req.params.productId,
+      req.user.id,
+      24
+    );
     const analysis = analyzeSeries(data);
     res.json({ product: { id: product.id, name: product.name }, ...analysis });
   } catch (e) {
@@ -17,8 +21,8 @@ exports.getProductForecast = async (req, res) => {
 
 exports.getAllTrends = async (req, res) => {
   try {
-    const products = await Product.getAll();
-    const allData = await Forecast.getAllMonthlyDemand(24);
+    const products = await Product.getAll(req.user.id);
+    const allData = await Forecast.getAllMonthlyDemand(req.user.id, 24);
 
     const grouped = {};
     allData.forEach(row => {
