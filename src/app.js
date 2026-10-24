@@ -13,6 +13,7 @@ app.use('/api/categories', auth, require('./routes/categoryRoutes'));
 app.use('/api/stock', auth, require('./routes/stockRoutes'));
 app.use('/api/dashboard', auth, require('./routes/dashboardRoutes'));
 app.use('/api/forecast', auth, require('./routes/forecastRoutes'));
+app.use('/api/analytics', auth, require('./routes/analyticsRoutes'));
 
 app.get('/', (_, res) => res.send('Inventory API running (MVC + SP + Forecasting)'));
 

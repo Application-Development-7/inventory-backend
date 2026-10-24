@@ -1,25 +1,34 @@
 const pool = require('../config/db');
 
-exports.getAll = async () => {
-  const [rows] = await pool.query('CALL sp_get_all_categories()');
-  return rows[0];
-};
-
-exports.create = async (d) => {
+exports.getAll = async (userId) => {
   const [rows] = await pool.query(
-    'CALL sp_create_category(?, ?)',
-    [d.name, d.description || null]
+    'SELECT * FROM categories WHERE user_id = ? ORDER BY name',
+    [userId]
   );
-  return rows[0][0];
+  return rows;
 };
 
-exports.update = async (id, d) => {
-  await pool.query(
-    'CALL sp_update_category(?, ?, ?)',
-    [id, d.name, d.description || null]
+exports.create = async (data, userId) => {
+  const [result] = await pool.query(
+    'INSERT INTO categories (user_id, name, description) VALUES (?, ?, ?)',
+    [userId, data.name, data.description || null]
   );
+  return { id: result.insertId };
 };
 
-exports.remove = async (id) => {
-  await pool.query('CALL sp_delete_category(?)', [id]);
+exports.update = async (id, data, userId) => {
+  const [result] = await pool.query(
+    `UPDATE categories SET name = ?, description = ?
+     WHERE id = ? AND user_id = ?`,
+    [data.name, data.description || null, id, userId]
+  );
+  return result.affectedRows > 0;
+};
+
+exports.remove = async (id, userId) => {
+  const [result] = await pool.query(
+    'DELETE FROM categories WHERE id = ? AND user_id = ?',
+    [id, userId]
+  );
+  return result.affectedRows > 0;
 };

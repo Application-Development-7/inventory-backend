@@ -27,6 +27,15 @@ function computeLinearTrend(points) {
   return { slope, r2, direction };
 }
 
+function monthKey(year, month) {
+  return year * 12 + month - 1;
+}
+
+function monthFromKey(key) {
+  const year = Math.floor(key / 12);
+  return { year, month: key - year * 12 + 1 };
+}
+
 function analyzeSeries(monthlyData) {
   const sorted = [...monthlyData].sort(
     (a, b) => (a.yr * 12 + a.mo) - (b.yr * 12 + b.mo)
@@ -68,12 +77,6 @@ function analyzeSeries(monthlyData) {
   const nextMonth = ((now.getMonth() + 1) % 12) + 1;
   const nextYear = now.getFullYear() + (nextMonth === 1 ? 1 : 0);
 
-  const projected = Math.max(0, recentAvg + trend.slope * (recent.length / 2));
-  const forecastValue = Math.max(
-    0,
-    Math.round(projected * seasonalIndex[nextMonth])
-  );
-
   const upcoming = seasonalIndex[nextMonth];
   let label = 'STABLE';
   if (upcoming >= 1.3) label = 'SEASONAL_PEAK';
@@ -85,6 +88,50 @@ function analyzeSeries(monthlyData) {
   const peakMonth = { month: parseInt(peakEntry[0]), index: peakEntry[1] };
 
   const confidence = Math.min(100, Math.round((sorted.length / 24) * 100));
+  const monthlyTotals = new Map(
+    sorted.map(point => [
+      monthKey(Number(point.yr), Number(point.mo)),
+      Number(point.total_out),
+    ])
+  );
+  const currentKey = monthKey(now.getFullYear(), now.getMonth() + 1);
+  const history = Array.from({ length: 24 }, (_, index) => {
+    const month = monthFromKey(currentKey - 23 + index);
+    return {
+      ...month,
+      demand: monthlyTotals.get(monthKey(month.year, month.month)) || 0,
+    };
+  });
+  const projections = [];
+  for (let index = 0; index < 6; index++) {
+    const month = monthFromKey(currentKey + index + 1);
+    const seasonalMultiplier = seasonalIndex[month.month];
+    const baseDemand = Math.max(
+      0,
+      recentAvg + trend.slope * (recent.length / 2 + index)
+    );
+    const predictedDemand = Math.max(
+      0,
+      Math.round(baseDemand * seasonalMultiplier)
+    );
+    const previousDemand =
+      index === 0
+        ? Number(history[history.length - 1].demand)
+        : Number(projections[index - 1].predicted_demand);
+    const direction =
+      predictedDemand > previousDemand
+        ? 'UP'
+        : predictedDemand < previousDemand
+        ? 'DOWN'
+        : 'STABLE';
+    projections.push({
+      ...month,
+      predicted_demand: predictedDemand,
+      confidence,
+      direction,
+      seasonal_multiplier: seasonalMultiplier,
+    });
+  }
 
   return {
     status: 'OK',
@@ -100,10 +147,12 @@ function analyzeSeries(monthlyData) {
     forecast: {
       month: nextMonth,
       year: nextYear,
-      predicted_demand: forecastValue,
+      predicted_demand: projections[0].predicted_demand,
       seasonal_multiplier: upcoming,
     },
     confidence,
+    history,
+    projections,
   };
 }
 
