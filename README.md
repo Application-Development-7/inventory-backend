@@ -20,9 +20,12 @@ scoped to the user ID from that verified token. Stock movements remain linked
 to their product owner; the transaction `user_id` column records the user who
 performed the movement.
 
-The authenticated `GET /api/forecast/trends` response includes a 24-month
-historical demand series and six monthly demand projections for each owned
-product with sufficient stock-out history.
+The authenticated `GET /api/forecast/trends` endpoint defaults to a 24-month
+historical demand series and six monthly projections. Pass `?view=yearly` to
+get up to five recent calendar years of historical demand and three annual
+projections. The selected-product endpoint supports the same parameter, for
+example `GET /api/forecast/product/1?view=yearly`. Yearly projections require
+stock-out history in at least three of the five displayed years.
 
 ## Top products by month
 
