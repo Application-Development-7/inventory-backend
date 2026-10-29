@@ -1,4 +1,5 @@
 // Pure forecasting math. NO database access here.
+const HIGH_CONFIDENCE_THRESHOLD = 80;
 
 function computeLinearTrend(points) {
   const n = points.length;
@@ -156,4 +157,169 @@ function analyzeSeries(monthlyData) {
   };
 }
 
-module.exports = { analyzeSeries };
+function analyzeYearlySeries(yearlyData) {
+  const sorted = [...yearlyData]
+    .map(point => ({
+      yr: Number(point.yr),
+      total_out: Number(point.total_out),
+    }))
+    .sort((a, b) => a.yr - b.yr);
+
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const firstYear = currentYear - 4;
+  const yearlyTotals = new Map(
+    sorted.map(point => [point.yr, point.total_out])
+  );
+  const history = Array.from({ length: 5 }, (_, index) => {
+    const year = firstYear + index;
+    return { year, demand: yearlyTotals.get(year) || 0 };
+  });
+  const populatedYears = history.filter(point =>
+    yearlyTotals.has(point.year)
+  ).length;
+
+  if (populatedYears < 3) {
+    return {
+      status: 'INSUFFICIENT_DATA',
+      message: 'Need at least 3 years of stock-out history',
+      data_points: populatedYears,
+      view: 'yearly',
+    };
+  }
+
+  const points = history.map(point => ({ total_out: point.demand }));
+  const trend = computeLinearTrend(points);
+  const overallAvg =
+    history.reduce((total, point) => total + point.demand, 0) / history.length;
+  const recentAvg = overallAvg;
+  const confidence = Math.min(100, Math.round((populatedYears / 5) * 100));
+  const label =
+    trend.slope > 0.05 * overallAvg
+      ? 'RISING'
+      : trend.slope < -0.05 * overallAvg
+        ? 'FALLING'
+        : 'STABLE';
+
+  const projections = [];
+  for (let index = 0; index < 3; index++) {
+    const predictedDemand = Math.max(
+      0,
+      Math.round(recentAvg + trend.slope * (history.length / 2 + index))
+    );
+    const previousDemand =
+      index === 0
+        ? history[history.length - 1].demand
+        : projections[index - 1].predicted_demand;
+    const direction =
+      predictedDemand > previousDemand
+        ? 'UP'
+        : predictedDemand < previousDemand
+          ? 'DOWN'
+          : 'STABLE';
+    projections.push({
+      year: currentYear + index + 1,
+      predicted_demand: predictedDemand,
+      confidence,
+      direction,
+    });
+  }
+
+  return {
+    status: 'OK',
+    view: 'yearly',
+    data_points: populatedYears,
+    trend: {
+      direction: trend.direction,
+      slope: +trend.slope.toFixed(2),
+      r2: +trend.r2.toFixed(2),
+    },
+    label,
+    confidence,
+    history,
+    projections,
+    forecast: {
+      year: projections[0].year,
+      predicted_demand: projections[0].predicted_demand,
+    },
+  };
+}
+
+function generateRecommendations(trends, { limit = 3 } = {}) {
+  const recommendations = [];
+
+  for (const trend of trends) {
+    const name = trend.product_name || 'This product';
+    const label = trend.label;
+    const quantity = Number(trend.quantity);
+    const minStock = Number(trend.min_stock);
+    const confidence = Number(trend.confidence);
+    const history = trend.history || [];
+    const projections = trend.projections || [];
+    const currentDemand = Number(history.at(-1)?.demand);
+    const nextDemand = Number(projections[0]?.predicted_demand);
+    const forecastPeriod = trend.view === 'yearly' ? 'next year' : 'next month';
+    const demandIncrease =
+      Number.isFinite(currentDemand) &&
+      currentDemand > 0 &&
+      Number.isFinite(nextDemand)
+        ? Math.max(0, Math.round(((nextDemand - currentDemand) / currentDemand) * 100))
+        : 0;
+
+    if (
+      label === 'RISING' &&
+      Number.isFinite(quantity) &&
+      Number.isFinite(minStock) &&
+      quantity < minStock
+    ) {
+      recommendations.push({
+        priority: 0,
+        type: 'URGENT',
+        title: `URGENT: ${name} is low on stock and demand is rising`,
+        description: 'Reorder immediately!',
+      });
+    }
+
+    if (label === 'RISING' || label === 'SEASONAL_PEAK') {
+      recommendations.push({
+        priority: 1,
+        type: 'HIGH_PRIORITY',
+        title: `Stock up on ${name}`,
+        description: `Demand is projected to rise ${demandIncrease}% ${forecastPeriod}.`,
+      });
+    }
+
+    if (
+      label === 'SEASONAL_PEAK' ||
+      (Number.isFinite(confidence) &&
+        confidence >= HIGH_CONFIDENCE_THRESHOLD)
+    ) {
+      recommendations.push({
+        priority: 2,
+        type: 'OPPORTUNITY',
+        title: `Reorder ${name} early`,
+        description: 'Lead time may increase.',
+      });
+    }
+
+    if (label === 'FALLING') {
+      recommendations.push({
+        priority: 3,
+        type: 'OPTIMIZE',
+        title: `Reduce ${name} order`,
+        description: 'Demand is expected to drop.',
+      });
+    }
+  }
+
+  return recommendations
+    .sort((a, b) => a.priority - b.priority)
+    .slice(0, limit)
+    .map(({ priority, ...recommendation }) => recommendation);
+}
+
+module.exports = {
+  analyzeSeries,
+  analyzeYearlySeries,
+  generateRecommendations,
+};

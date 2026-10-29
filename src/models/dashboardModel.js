@@ -5,7 +5,9 @@ exports.summary = async (userId) => {
     pool.query(
       `SELECT COUNT(*) AS total_products,
               COALESCE(SUM(quantity), 0) AS total_stock,
-              COALESCE(SUM(quantity <= min_stock), 0) AS low_stock_count
+              COALESCE(SUM(quantity <= min_stock), 0) AS low_stock_count,
+              CAST(COALESCE(SUM(price * quantity), 0) AS DECIMAL(10, 2))
+                AS inventory_value
        FROM products
        WHERE user_id = ?`,
       [userId]
