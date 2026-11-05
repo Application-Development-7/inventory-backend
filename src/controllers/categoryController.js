@@ -1,25 +1,27 @@
 const Cat = require('../models/categoryModel');
 
 exports.list = async (req, res) => {
-  try { res.json(await Cat.getAll()); }
+  try { res.json(await Cat.getAll(req.user.id)); }
   catch (e) { res.status(500).json({ message: e.message }); }
 };
 
 exports.create = async (req, res) => {
-  try { res.status(201).json(await Cat.create(req.body)); }
+  try { res.status(201).json(await Cat.create(req.body, req.user.id)); }
   catch (e) { res.status(400).json({ message: e.message }); }
 };
 
 exports.update = async (req, res) => {
   try {
-    await Cat.update(req.params.id, req.body);
+    const updated = await Cat.update(req.params.id, req.body, req.user.id);
+    if (!updated) return res.status(404).json({ message: 'Not found' });
     res.json({ message: 'Updated' });
   } catch (e) { res.status(400).json({ message: e.message }); }
 };
 
 exports.remove = async (req, res) => {
   try {
-    await Cat.remove(req.params.id);
+    const removed = await Cat.remove(req.params.id, req.user.id);
+    if (!removed) return res.status(404).json({ message: 'Not found' });
     res.json({ message: 'Deleted' });
   } catch (e) { res.status(400).json({ message: e.message }); }
 };
