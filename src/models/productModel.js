@@ -9,6 +9,15 @@ const insertAuditLog = async (connection, log) => {
   );
 };
 
+async function validateCategory(connection, categoryId, userId) {
+  if (categoryId == null) return;
+  const [rows] = await connection.query(
+    'SELECT id FROM categories WHERE id = ? AND user_id = ?',
+    [categoryId, userId],
+  );
+  if (rows.length === 0) throw new Error('Category not found');
+}
+
 exports.getAll = async (userId) => {
   const [rows] = await pool.query(
     `SELECT p.id, p.name, p.category_id, c.name AS category_name,
@@ -51,35 +60,28 @@ exports.getLowStock = async (userId) => {
   return rows;
 };
 
-exports.create = async (d, userId, auditAction) => {
+exports.create = async (data, userId, auditAction) => {
   const connection = await pool.getConnection();
   let transactionStarted = false;
   try {
     await connection.beginTransaction();
     transactionStarted = true;
-    if (d.category_id) {
-      const [categories] = await connection.query(
-        'SELECT id FROM categories WHERE id = ? AND user_id = ?',
-        [d.category_id, userId],
-      );
-      if (categories.length === 0) {
-        throw new Error('Category not found');
-      }
-    }
+    const categoryId = data.category_id || null;
+    await validateCategory(connection, categoryId, userId);
 
-    const quantity = Number(d.quantity ?? 0);
+    const quantity = Number(data.quantity ?? 0);
     const [result] = await connection.query(
       `INSERT INTO products
-        (name, category_id, sku, price, quantity, min_stock, user_id)
+        (user_id, name, category_id, sku, price, quantity, min_stock)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
-        d.name,
-        d.category_id || null,
-        d.sku || null,
-        d.price || 0,
-        quantity,
-        d.min_stock ?? 5,
         userId,
+        data.name,
+        categoryId,
+        data.sku || null,
+        data.price || 0,
+        quantity,
+        data.min_stock ?? 5,
       ],
     );
 
@@ -115,31 +117,33 @@ exports.create = async (d, userId, auditAction) => {
   }
 };
 
-exports.update = async (id, userId, d, audit) => {
+exports.update = async (id, userId, data, audit) => {
   const connection = await pool.getConnection();
   let transactionStarted = false;
   try {
     await connection.beginTransaction();
     transactionStarted = true;
-    if (d.category_id) {
-      const [categories] = await connection.query(
-        'SELECT id FROM categories WHERE id = ? AND user_id = ?',
-        [d.category_id, userId],
-      );
-      if (categories.length === 0) {
-        throw new Error('Category not found');
-      }
+    const [existingRows] = await connection.query(
+      'SELECT id FROM products WHERE id = ? AND user_id = ? FOR UPDATE',
+      [id, userId],
+    );
+    if (existingRows.length === 0) {
+      await connection.rollback();
+      transactionStarted = false;
+      return false;
     }
+    const categoryId = data.category_id || null;
+    await validateCategory(connection, categoryId, userId);
     await connection.query(
       `UPDATE products
        SET name = ?, category_id = ?, sku = ?, price = ?, min_stock = ?
        WHERE id = ? AND user_id = ?`,
       [
-        d.name,
-        d.category_id || null,
-        d.sku || null,
-        d.price || 0,
-        d.min_stock ?? 5,
+        data.name,
+        categoryId,
+        data.sku || null,
+        data.price || 0,
+        data.min_stock ?? 5,
         id,
         userId,
       ],
@@ -147,6 +151,7 @@ exports.update = async (id, userId, d, audit) => {
     await insertAuditLog(connection, audit);
     await connection.commit();
     transactionStarted = false;
+    return true;
   } catch (error) {
     if (transactionStarted) await connection.rollback();
     throw error;
@@ -165,13 +170,19 @@ exports.remove = async (id, userId, audit) => {
       'DELETE FROM stock_transactions WHERE product_id = ? AND user_id = ?',
       [id, userId],
     );
-    await connection.query(
+    const [result] = await connection.query(
       'DELETE FROM products WHERE id = ? AND user_id = ?',
       [id, userId],
     );
+    if (result.affectedRows === 0) {
+      await connection.rollback();
+      transactionStarted = false;
+      return false;
+    }
     await insertAuditLog(connection, audit);
     await connection.commit();
     transactionStarted = false;
+    return true;
   } catch (error) {
     if (transactionStarted) await connection.rollback();
     throw error;

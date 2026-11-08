@@ -42,12 +42,13 @@ exports.update = async (req, res) => {
     const existing = await Product.getById(req.params.id, req.user.id);
     if (!existing) return res.status(404).json({ message: 'Not found' });
     const productName = req.body.name?.trim() || existing.name;
-    await Product.update(req.params.id, req.user.id, req.body, {
+    const updated = await Product.update(req.params.id, req.user.id, req.body, {
       userId: req.user.id,
       action: `${auditActor(req.user)} edited product ${productName}`,
       entityName: productName,
       details: JSON.stringify({ productId: existing.id }),
     });
+    if (!updated) return res.status(404).json({ message: 'Not found' });
     res.json({ message: 'Updated' });
   } catch (e) { res.status(400).json({ message: e.message }); }
 };
@@ -56,12 +57,13 @@ exports.remove = async (req, res) => {
   try {
     const existing = await Product.getById(req.params.id, req.user.id);
     if (!existing) return res.status(404).json({ message: 'Not found' });
-    await Product.remove(req.params.id, req.user.id, {
+    const removed = await Product.remove(req.params.id, req.user.id, {
       userId: req.user.id,
       action: `${auditActor(req.user)} deleted product ${existing.name}`,
       entityName: existing.name,
       details: JSON.stringify({ productId: existing.id }),
     });
+    if (!removed) return res.status(404).json({ message: 'Not found' });
     res.json({ message: 'Deleted' });
   } catch (e) { res.status(400).json({ message: e.message }); }
 };

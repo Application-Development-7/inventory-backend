@@ -1,15 +1,27 @@
 const Dash = require('../models/dashboardModel');
 
+function numericValue(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 exports.summary = async (req, res) => {
   try {
-    const data = await Dash.summary(req.user.id);
+    const dashboard = await Dash.summary(req.user.id);
     res.json({
-      ...data,
-      low_stock_products: Array.isArray(data.low_stock_products)
-        ? data.low_stock_products
+      ...dashboard,
+      stats: {
+        ...dashboard.stats,
+        total_products: numericValue(dashboard.stats.total_products),
+        total_stock: numericValue(dashboard.stats.total_stock),
+        low_stock_count: numericValue(dashboard.stats.low_stock_count),
+        inventory_value: numericValue(dashboard.stats.inventory_value),
+      },
+      low_stock_products: Array.isArray(dashboard.low_stock_products)
+        ? dashboard.low_stock_products
         : [],
-      recent_transactions: Array.isArray(data.recent_transactions)
-        ? data.recent_transactions
+      recent_transactions: Array.isArray(dashboard.recent_transactions)
+        ? dashboard.recent_transactions
         : [],
     });
   } catch (e) {

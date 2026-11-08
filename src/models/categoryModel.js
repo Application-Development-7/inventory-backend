@@ -8,10 +8,10 @@ exports.getAll = async (userId) => {
   return rows;
 };
 
-exports.create = async (d, userId) => {
+exports.create = async (data, userId) => {
   const [result] = await pool.query(
     'INSERT INTO categories (name, description, user_id) VALUES (?, ?, ?)',
-    [d.name, d.description || null, userId],
+    [data.name, data.description || null, userId],
   );
   const [rows] = await pool.query(
     'SELECT id, name, description FROM categories WHERE id = ? AND user_id = ?',

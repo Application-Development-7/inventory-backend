@@ -11,11 +11,33 @@ exports.findById = async (userId) => {
 };
 
 exports.create = async (username, passwordHash, role) => {
-  const [rows] = await pool.query(
-    'CALL sp_register_user(?, ?, ?)',
-    [username, passwordHash, role]
-  );
-  return rows[0][0];
+  const connection = await pool.getConnection();
+  let transactionStarted = false;
+  try {
+    await connection.beginTransaction();
+    transactionStarted = true;
+    const [result] = await connection.query(
+      'INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)',
+      [username, passwordHash, role],
+    );
+    await connection.query(
+      `INSERT INTO categories (user_id, name, description)
+       SELECT ?, name, description
+       FROM categories
+       WHERE user_id = (
+         SELECT id FROM users WHERE role = 'admin' ORDER BY id LIMIT 1
+       )`,
+      [result.insertId],
+    );
+    await connection.commit();
+    transactionStarted = false;
+    return { id: result.insertId };
+  } catch (error) {
+    if (transactionStarted) await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 };
 
 exports.updateProfile = async (userId, username, displayName) => {
