@@ -1,6 +1,6 @@
-const router = require('express').Router();
-const controller = require('../controllers/analyticsController');
+const r = require('express').Router();
+const c = require('../controllers/analyticsController');
 
-router.get('/top-products', controller.getTopProducts);
+r.get('/top-products', c.getTopProducts);
 
-module.exports = router;
+module.exports = r;

@@ -49,12 +49,13 @@ exports.record = async ({
 exports.history = async (productId, userId) => {
   const [rows] = await pool.query(
     `SELECT st.*, u.username
-     FROM stock_transactions st
-     JOIN products p ON st.product_id = p.id
-     LEFT JOIN users u ON st.user_id = u.id
-     WHERE st.product_id = ? AND p.user_id = ?
-     ORDER BY st.created_at DESC`,
-    [productId, userId]
+     FROM stock_transactions AS st
+     INNER JOIN products AS p
+       ON p.id = st.product_id AND p.user_id = st.user_id
+     LEFT JOIN users AS u ON u.id = st.user_id
+     WHERE st.product_id = ? AND st.user_id = ? AND p.user_id = ?
+     ORDER BY st.created_at DESC, st.id DESC`,
+    [productId, userId, userId],
   );
   return rows;
 };
