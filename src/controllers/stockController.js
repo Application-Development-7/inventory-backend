@@ -12,6 +12,11 @@ exports.record = async (req, res) => {
       return res.status(400).json({ message: 'Quantity must be a positive integer' });
     }
 
+    const product = await Product.getById(product_id, req.user.id);
+    if (!product) {
+      return res.status(404).json({ message: 'Product not found' });
+    }
+
     const result = await Stock.record({
       product_id,
       type,
@@ -31,6 +36,5 @@ exports.history = async (req, res) => {
     const product = await Product.getById(req.params.productId, req.user.id);
     if (!product) return res.status(404).json({ message: 'Product not found' });
     res.json(await Stock.history(req.params.productId, req.user.id));
-  }
-  catch (e) { res.status(500).json({ message: e.message }); }
+  } catch (e) { res.status(500).json({ message: e.message }); }
 };
