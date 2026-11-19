@@ -2,9 +2,38 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const {
+  analyzeSeries,
   analyzeYearlySeries,
   generateRecommendations,
 } = require('../src/services/forecastingService');
+
+test('monthly analysis returns a rolling 12-month history', () => {
+  const now = new Date();
+  const result = analyzeSeries(
+    Array.from({ length: 12 }, (_, index) => {
+      const month = new Date(now.getFullYear(), now.getMonth() - 11 + index);
+      return {
+        yr: month.getFullYear(),
+        mo: month.getMonth() + 1,
+        total_out: 20 + index,
+      };
+    })
+  );
+
+  assert.equal(result.status, 'OK');
+  assert.equal(result.history.length, 12);
+  assert.deepEqual(result.history[0], {
+    year: new Date(now.getFullYear(), now.getMonth() - 11).getFullYear(),
+    month: new Date(now.getFullYear(), now.getMonth() - 11).getMonth() + 1,
+    demand: 20,
+  });
+  assert.deepEqual(result.history.at(-1), {
+    year: now.getFullYear(),
+    month: now.getMonth() + 1,
+    demand: 31,
+  });
+  assert.equal(result.confidence, 100);
+});
 
 test('yearly analysis returns recent history and three annual projections', () => {
   const currentYear = new Date().getFullYear();

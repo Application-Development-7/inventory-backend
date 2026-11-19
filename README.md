@@ -20,7 +20,7 @@ scoped to the user ID from that verified token. Stock movements remain linked
 to their product owner; the transaction `user_id` column records the user who
 performed the movement.
 
-The authenticated `GET /api/forecast/trends` endpoint defaults to a 24-month
+The authenticated `GET /api/forecast/trends` endpoint defaults to a 12-month
 historical demand series and six monthly projections. Pass `?view=yearly` to
 get up to five recent calendar years of historical demand and three annual
 projections. The selected-product endpoint supports the same parameter, for
@@ -35,3 +35,14 @@ to create `sp_get_top_products_by_month`. The authenticated
 `GET /api/analytics/top-products?month=10` endpoint accepts a calendar month
 from 1 to 12; when omitted, it uses the server's current month. Both the API
 and the stored procedure use MySQL's 1-based month numbering.
+
+## Stored procedure-backed models
+
+The Node.js models call stored procedures for all database reads and writes,
+including forecast queries. After applying the database schema and the
+user-data, display-name, preferences, and audit-log migrations/scripts, run
+[`database/stored_procedures.sql`](database/stored_procedures.sql) in MySQL
+Workbench. Run it last because it replaces stored procedures from the earlier
+scripts with definitions matching the current backend. The script targets
+`inventory_db`; change its `USE` statement if your database has a different
+name.

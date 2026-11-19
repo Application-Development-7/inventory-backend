@@ -1,63 +1,41 @@
 const pool = require('../config/db');
 
 exports.getAll = async (userId) => {
-  const [rows] = await pool.query(
-    'SELECT id, name, description FROM categories WHERE user_id = ? ORDER BY name',
-    [userId],
-  );
-  return rows;
+  const [results] = await pool.query('CALL sp_get_all_categories(?)', [userId]);
+  return results[0];
 };
 
 exports.create = async (data, userId) => {
-  const [result] = await pool.query(
-    'INSERT INTO categories (name, description, user_id) VALUES (?, ?, ?)',
-    [data.name, data.description || null, userId],
-  );
-  const [rows] = await pool.query(
-    'SELECT id, name, description FROM categories WHERE id = ? AND user_id = ?',
-    [result.insertId, userId],
-  );
-  return rows[0];
+  const [results] = await pool.query('CALL sp_create_category(?, ?, ?)', [
+    userId,
+    data.name,
+    data.description || null,
+  ]);
+  return results[0][0];
 };
 
 exports.getById = async (id, userId) => {
-  const [rows] = await pool.query(
-    'SELECT id, name, description FROM categories WHERE id = ? AND user_id = ?',
-    [id, userId],
-  );
-  return rows[0] || null;
+  const [results] = await pool.query('CALL sp_get_category_by_id(?, ?)', [
+    userId,
+    id,
+  ]);
+  return results[0][0] || null;
 };
 
-exports.update = async (id, d, userId) => {
-  const [result] = await pool.query(
-    `UPDATE categories SET name = ?, description = ?
-     WHERE id = ? AND user_id = ?`,
-    [d.name, d.description || null, id, userId],
-  );
-  return result.affectedRows > 0;
+exports.update = async (id, data, userId) => {
+  const [results] = await pool.query('CALL sp_update_category(?, ?, ?, ?)', [
+    id,
+    userId,
+    data.name,
+    data.description || null,
+  ]);
+  return Number(results[0][0].updated) > 0;
 };
 
 exports.remove = async (id, userId) => {
-  const connection = await pool.getConnection();
-  let transactionStarted = false;
-  try {
-    await connection.beginTransaction();
-    transactionStarted = true;
-    await connection.query(
-      'UPDATE products SET category_id = NULL WHERE category_id = ? AND user_id = ?',
-      [id, userId],
-    );
-    const [result] = await connection.query(
-      'DELETE FROM categories WHERE id = ? AND user_id = ?',
-      [id, userId],
-    );
-    await connection.commit();
-    transactionStarted = false;
-    return result.affectedRows > 0;
-  } catch (error) {
-    if (transactionStarted) await connection.rollback();
-    throw error;
-  } finally {
-    connection.release();
-  }
+  const [results] = await pool.query('CALL sp_delete_category(?, ?)', [
+    id,
+    userId,
+  ]);
+  return Number(results[0][0].deleted) > 0;
 };

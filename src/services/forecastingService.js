@@ -1,5 +1,6 @@
 // Pure forecasting math. NO database access here.
 const HIGH_CONFIDENCE_THRESHOLD = 80;
+const MONTHLY_HISTORY_LENGTH = 12;
 
 function computeLinearTrend(points) {
   const n = points.length;
@@ -88,7 +89,10 @@ function analyzeSeries(monthlyData) {
   const peakEntry = Object.entries(seasonalIndex).sort((a, b) => b[1] - a[1])[0];
   const peakMonth = { month: parseInt(peakEntry[0]), index: peakEntry[1] };
 
-  const confidence = Math.min(100, Math.round((sorted.length / 24) * 100));
+  const confidence = Math.min(
+    100,
+    Math.round((sorted.length / MONTHLY_HISTORY_LENGTH) * 100)
+  );
   const monthlyTotals = new Map(
     sorted.map(point => [
       monthKey(Number(point.yr), Number(point.mo)),
@@ -96,8 +100,10 @@ function analyzeSeries(monthlyData) {
     ])
   );
   const currentKey = monthKey(now.getFullYear(), now.getMonth() + 1);
-  const history = Array.from({ length: 24 }, (_, index) => {
-    const month = monthFromKey(currentKey - 23 + index);
+  const history = Array.from({ length: MONTHLY_HISTORY_LENGTH }, (_, index) => {
+    const month = monthFromKey(
+      currentKey - MONTHLY_HISTORY_LENGTH + 1 + index
+    );
     return {
       ...month,
       demand: monthlyTotals.get(monthKey(month.year, month.month)) || 0,
