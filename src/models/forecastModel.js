@@ -12,69 +12,35 @@ function normalizeDemandRows(
   }));
 }
 
-exports.getMonthlyDemand = async (productId, userId, monthsBack = 24) => {
-  const [rows] = await pool.query(
-    `SELECT YEAR(st.created_at) AS yr,
-            MONTH(st.created_at) AS mo,
-            SUM(st.quantity) AS total_out
-     FROM stock_transactions AS st
-     INNER JOIN products AS p
-       ON p.id = st.product_id AND p.user_id = st.user_id
-     WHERE p.id = ? AND p.user_id = ? AND st.user_id = ?
-       AND st.type = 'OUT'
-       AND st.created_at >= DATE_SUB(CURDATE(), INTERVAL ? MONTH)
-     GROUP BY YEAR(st.created_at), MONTH(st.created_at)
-     ORDER BY yr, mo`,
-    [productId, userId, userId, monthsBack],
+exports.getMonthlyDemand = async (productId, userId, monthsBack = 12) => {
+  const [results] = await pool.query(
+    'CALL sp_get_monthly_demand(?, ?, ?)',
+    [productId, userId, monthsBack],
   );
-  return normalizeDemandRows(rows);
+  return normalizeDemandRows(results[0]);
 };
 
 exports.getYearlyDemand = async (productId, userId) => {
-  const [rows] = await pool.query(
-    `SELECT YEAR(st.created_at) AS yr, SUM(st.quantity) AS total_out
-     FROM stock_transactions AS st
-     INNER JOIN products AS p
-       ON p.id = st.product_id AND p.user_id = st.user_id
-     WHERE p.id = ? AND p.user_id = ? AND st.user_id = ?
-       AND st.type = 'OUT'
-     GROUP BY YEAR(st.created_at)
-     ORDER BY yr`,
-    [productId, userId, userId],
-  );
-  return normalizeDemandRows(rows, { yearly: true });
+  const [results] = await pool.query('CALL sp_get_yearly_demand(?, ?)', [
+    productId,
+    userId,
+  ]);
+  return normalizeDemandRows(results[0], { yearly: true });
 };
 
-exports.getAllMonthlyDemand = async (userId, monthsBack = 24) => {
-  const [rows] = await pool.query(
-    `SELECT p.id AS product_id,
-            YEAR(st.created_at) AS yr,
-            MONTH(st.created_at) AS mo, SUM(st.quantity) AS total_out
-     FROM stock_transactions AS st
-     INNER JOIN products AS p
-       ON p.id = st.product_id AND p.user_id = st.user_id
-     WHERE p.user_id = ? AND st.user_id = ? AND st.type = 'OUT'
-       AND st.created_at >= DATE_SUB(CURDATE(), INTERVAL ? MONTH)
-     GROUP BY p.id, YEAR(st.created_at), MONTH(st.created_at)
-     ORDER BY p.id, yr, mo`,
-    [userId, userId, monthsBack],
+exports.getAllMonthlyDemand = async (userId, monthsBack = 12) => {
+  const [results] = await pool.query(
+    'CALL sp_get_all_monthly_demand(?, ?)',
+    [userId, monthsBack],
   );
-  return normalizeDemandRows(rows, { includeProductId: true });
+  return normalizeDemandRows(results[0], { includeProductId: true });
 };
 
-exports.getAllYearlyDemand = async userId => {
-  const [rows] = await pool.query(
-    `SELECT p.id AS product_id, YEAR(st.created_at) AS yr,
-            SUM(st.quantity) AS total_out
-     FROM stock_transactions AS st
-     INNER JOIN products AS p
-       ON p.id = st.product_id AND p.user_id = st.user_id
-     WHERE p.user_id = ? AND st.user_id = ? AND st.type = 'OUT'
-     GROUP BY p.id, YEAR(st.created_at)
-     ORDER BY p.id, yr`,
-    [userId, userId],
-  );
-  return normalizeDemandRows(rows, {
+exports.getAllYearlyDemand = async (userId) => {
+  const [results] = await pool.query('CALL sp_get_all_yearly_demand(?)', [
+    userId,
+  ]);
+  return normalizeDemandRows(results[0], {
     includeProductId: true,
     yearly: true,
   });

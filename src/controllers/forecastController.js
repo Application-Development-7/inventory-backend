@@ -118,7 +118,7 @@ exports.getProductForecast = async (req, res) => {
         : await Forecast.getMonthlyDemand(
             req.params.productId,
             req.user.id,
-            24
+            12
           );
     const analysis = normalizeForecastNumbers(
       view === 'yearly'
@@ -143,7 +143,7 @@ exports.getAllTrends = async (req, res) => {
     const allData =
       view === 'yearly'
         ? await Forecast.getAllYearlyDemand(req.user.id)
-        : await Forecast.getAllMonthlyDemand(req.user.id, 24);
+        : await Forecast.getAllMonthlyDemand(req.user.id, 12);
 
     const grouped = {};
     allData.forEach(row => {

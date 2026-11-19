@@ -3,7 +3,10 @@ const assert = require('node:assert/strict');
 
 const Forecast = require('../src/models/forecastModel');
 const Product = require('../src/models/productModel');
-const { getAllTrends } = require('../src/controllers/forecastController');
+const {
+  getAllTrends,
+  getProductForecast,
+} = require('../src/controllers/forecastController');
 
 test('all trends response includes stock levels and actionable recommendations', async () => {
   const originalGetAll = Product.getAll;
@@ -21,8 +24,9 @@ test('all trends response includes stock levels and actionable recommendations',
       },
     ];
   };
-  Forecast.getAllMonthlyDemand = async userId => {
+  Forecast.getAllMonthlyDemand = async (userId, monthsBack) => {
     assert.equal(userId, 42);
+    assert.equal(monthsBack, 12);
     const now = new Date();
     return [3, 2, 1].map((monthsAgo, index) => {
       const monthDate = new Date(now.getFullYear(), now.getMonth() - monthsAgo);
@@ -67,5 +71,61 @@ test('all trends response includes stock levels and actionable recommendations',
     Product.getAll = originalGetAll;
     Forecast.getAllMonthlyDemand = originalGetAllMonthlyDemand;
     Forecast.getAllYearlyDemand = originalGetAllYearlyDemand;
+  }
+});
+
+test('product monthly forecast requests a 12-month demand window', async () => {
+  const originalGetById = Product.getById;
+  const originalGetMonthlyDemand = Forecast.getMonthlyDemand;
+  let requestedMonthsBack;
+
+  Product.getById = async (productId, userId) => {
+    assert.equal(productId, '7');
+    assert.equal(userId, 42);
+    return { id: 7, name: 'Coffee' };
+  };
+  Forecast.getMonthlyDemand = async (productId, userId, monthsBack) => {
+    assert.equal(productId, '7');
+    assert.equal(userId, 42);
+    requestedMonthsBack = monthsBack;
+    const now = new Date();
+    return [2, 1, 0].map((monthsAgo, index) => {
+      const monthDate = new Date(now.getFullYear(), now.getMonth() - monthsAgo);
+      return {
+        yr: monthDate.getFullYear(),
+        mo: monthDate.getMonth() + 1,
+        total_out: (index + 1) * 10,
+      };
+    });
+  };
+
+  const response = {
+    statusCode: 200,
+    status(code) {
+      this.statusCode = code;
+      return this;
+    },
+    json(payload) {
+      this.body = payload;
+      return this;
+    },
+  };
+
+  try {
+    await getProductForecast(
+      {
+        params: { productId: '7' },
+        query: { view: 'monthly' },
+        user: { id: 42 },
+      },
+      response
+    );
+
+    assert.equal(requestedMonthsBack, 12);
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.body.history.length, 12);
+  } finally {
+    Product.getById = originalGetById;
+    Forecast.getMonthlyDemand = originalGetMonthlyDemand;
   }
 });

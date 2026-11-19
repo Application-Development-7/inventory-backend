@@ -7,55 +7,23 @@ exports.record = async ({
   note,
   user_id,
 }) => {
-  const connection = await pool.getConnection();
-  try {
-    await connection.beginTransaction();
-    const [products] = await connection.query(
-      'SELECT quantity FROM products WHERE id = ? AND user_id = ? FOR UPDATE',
-      [product_id, user_id]
-    );
-    if (products.length === 0) {
-      await connection.rollback();
-      return null;
-    }
-
-    const currentQuantity = products[0].quantity;
-    if (type === 'OUT' && currentQuantity < quantity) {
-      throw new Error('Insufficient stock');
-    }
-    const newQuantity =
-      type === 'IN' ? currentQuantity + quantity : currentQuantity - quantity;
-
-    await connection.query(
-      'UPDATE products SET quantity = ? WHERE id = ? AND user_id = ?',
-      [newQuantity, product_id, user_id]
-    );
-    await connection.query(
-      `INSERT INTO stock_transactions
-         (product_id, type, quantity, note, user_id)
-       VALUES (?, ?, ?, ?, ?)`,
-      [product_id, type, quantity, note || null, user_id]
-    );
-    await connection.commit();
-    return { new_quantity: newQuantity };
-  } catch (error) {
-    await connection.rollback();
-    throw error;
-  } finally {
-    connection.release();
-  }
+  const [results] = await pool.query('CALL sp_record_stock(?, ?, ?, ?, ?)', [
+    product_id,
+    type,
+    quantity,
+    note || null,
+    user_id,
+  ]);
+  const result = results[0][0];
+  return Number(result.found) === 1
+    ? { new_quantity: result.new_quantity }
+    : null;
 };
 
 exports.history = async (productId, userId) => {
-  const [rows] = await pool.query(
-    `SELECT st.*, u.username
-     FROM stock_transactions AS st
-     INNER JOIN products AS p
-       ON p.id = st.product_id AND p.user_id = st.user_id
-     LEFT JOIN users AS u ON u.id = st.user_id
-     WHERE st.product_id = ? AND st.user_id = ? AND p.user_id = ?
-     ORDER BY st.created_at DESC, st.id DESC`,
-    [productId, userId, userId],
-  );
-  return rows;
+  const [results] = await pool.query('CALL sp_get_stock_history(?, ?)', [
+    productId,
+    userId,
+  ]);
+  return results[0];
 };
